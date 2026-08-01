@@ -15,9 +15,9 @@ describe("Breeva mapping", () => {
 
   it("maps Matter percentages to Breeva's four discrete speeds", () => {
     expect(mapBreevaPercentToSpeed(0)).toBe(0);
-    expect(mapBreevaPercentToSpeed(25)).toBe(1);
-    expect(mapBreevaPercentToSpeed(45)).toBe(2);
-    expect(mapBreevaPercentToSpeed(75)).toBe(3);
-    expect(mapBreevaPercentToSpeed(100)).toBe(4);
+    expect(mapBreevaPercentToSpeed(25)).toBe(0);
+    expect(mapBreevaPercentToSpeed(45)).toBe(1);
+    expect(mapBreevaPercentToSpeed(75)).toBe(2);
+    expect(mapBreevaPercentToSpeed(100)).toBe(3);
   });
 });

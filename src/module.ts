@@ -7,7 +7,12 @@ import {
 } from "matterbridge";
 import type { AnsiLogger, LogLevel } from "matterbridge/logger";
 import { BridgedDeviceBasicInformation, FanControl, OnOff } from "matterbridge/matter/clusters";
-import { BREEVA_MODES, isSupportedBreeva } from "./breeva-map.js";
+import {
+  BREEVA_MODES,
+  BREEVA_SPEED_PERCENT,
+  isSupportedBreeva,
+  mapBreevaPercentToSpeed,
+} from "./breeva-map.js";
 import { TclHomeClient, type Json, type TclDevice } from "./tcl-home-client.js";
 
 export type TclPlatformConfig = BasePlatformConfig & {
@@ -161,6 +166,7 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
   }
 
   private command(device: TclDevice, desired: Json): void {
+    this.optimisticUpdate(device, desired);
     const pending = this.pendingCommands.get(device.deviceId) ?? {};
     if (!this.pendingPriorities.has(device.deviceId)) {
       if (desired.mode !== undefined) this.pendingPriorities.set(device.deviceId, "mode");
@@ -176,6 +182,37 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
     if (this.runningCommands.has(device.deviceId)) return;
     this.runningCommands.add(device.deviceId);
     void this.drainCommands(device);
+  }
+  private async optimisticUpdate(device: TclDevice, desired: Json): Promise<void> {
+    const endpoint = this.devices.get(device.deviceId)?.endpoint;
+    if (!endpoint) return;
+    this.updatingMatter = true;
+    try {
+      if (desired.power !== undefined)
+        await endpoint.setAttribute(OnOff, "onOff", boolValue(desired.power), this.log);
+      if (desired.fanSpeed !== undefined && desired.fanSpeed !== null) {
+        const speed = mapBreevaPercentToSpeed(desired.fanSpeed);
+        if (speed !== undefined) {
+          await endpoint.setAttribute(
+            FanControl,
+            "percentCurrent",
+            BREEVA_SPEED_PERCENT[speed] ?? 0,
+            this.log,
+          );
+          if (speed > 0)
+            await endpoint.setAttribute(FanControl, "fanMode", FanControl.FanMode.Low, this.log);
+        }
+      }
+      if (desired.mode !== undefined)
+        await endpoint.setAttribute(
+          FanControl,
+          "fanMode",
+          desired.mode === "auto" ? FanControl.FanMode.Auto : FanControl.FanMode.Low,
+          this.log,
+        );
+    } finally {
+      this.updatingMatter = false;
+    }
   }
   private async drainCommands(device: TclDevice): Promise<void> {
     try {
@@ -230,7 +267,7 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
         await endpoint.setAttribute(
           FanControl,
           "percentCurrent",
-          Math.max(0, Math.min(100, speed <= 4 ? speed * 25 : speed)),
+          BREEVA_SPEED_PERCENT[Math.round(speed)] ?? Math.max(0, Math.min(100, speed)),
           this.log,
         );
       if (state.mode !== undefined)

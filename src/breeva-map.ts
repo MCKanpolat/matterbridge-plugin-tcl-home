@@ -25,23 +25,24 @@ export const BREEVA_FUNCTIONS = {
 /** Breeva A2 values observed from the real device. */
 export const BREEVA_MODES = {
   auto: 0,
+  sleep: 1,
   manual: 2,
 } as const;
 
-/** Breeva A2 has Sleep plus three higher speeds; TCL accepts values 1..4. */
+/** Matter percentages representing Breeva's Sleep, Low, Mid, and High steps. */
 export const BREEVA_SPEED_PERCENT = [25, 50, 75, 100] as const;
 
-/** Map Matter's continuous percentage setting to the Breeva's four steps. */
+/** Map Matter's continuous percentage setting to Breeva windSpeed 0..3. */
 export function mapBreevaPercentToSpeed(value: unknown): number | undefined {
   const percent = Number(value);
   if (!Number.isFinite(percent)) return undefined;
   if (percent <= 0) return 0;
-  let closest = 1;
+  let closest = 0;
   let distance = Math.abs(percent - BREEVA_SPEED_PERCENT[0]!);
   for (let index = 1; index < BREEVA_SPEED_PERCENT.length; index++) {
     const candidateDistance = Math.abs(percent - BREEVA_SPEED_PERCENT[index]!);
     if (candidateDistance < distance) {
-      closest = index + 1;
+      closest = index;
       distance = candidateDistance;
     }
   }

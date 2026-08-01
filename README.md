@@ -73,7 +73,7 @@ The plugin needs outbound HTTPS access to TCL Home and AWS endpoints. In Docker 
 - Breeva A3 and A5 are accepted by the same guarded mapping and need real-device validation
 - Power → Matter OnOff
 - Fan speed and auto mode → Matter FanControl
-- Fan percentage is mapped to Breeva's discrete steps: 0% off, 25% Sleep, 50% speed 2, 75% speed 3, and 100% speed 4; intermediate values use the nearest step
+- Fan percentage is mapped to Breeva's discrete steps: 25% Sleep, 50% Low, 75% Mid, and 100% High; intermediate values use the nearest step
 - Online status → endpoint reachability
 - Apple Home command bursts are serialized and coalesced before cloud publish
 

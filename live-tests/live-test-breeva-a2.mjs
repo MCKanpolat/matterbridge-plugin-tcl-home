@@ -84,7 +84,7 @@ try {
     await wait();
   }
   if (original.fanSpeed !== undefined && original.mode !== 0) {
-    await client.sendCommand(device, { fanSpeed: Number(original.fanSpeed) * 25 });
+    await client.sendCommand(device, { fanSpeed: (Number(original.fanSpeed) + 1) * 25 });
     await wait();
   }
   if (original.mode !== undefined) {

@@ -254,9 +254,10 @@ export class TclHomeClient {
       const speed = mapBreevaPercentToSpeed(desired.fanSpeed);
       if (speed === undefined) return;
       shadowDesired.windSpeed = speed;
-      // Breeva ignores manual speed changes while Auto mode is active.
-      // Selecting a speed from Matter therefore also selects Manual mode.
-      if (desired.mode === undefined) shadowDesired.workMode = BREEVA_MODES.manual;
+      // Breeva ignores speed changes in Auto. Sleep is its own work mode;
+      // the three higher windSpeed values use Manual mode.
+      if (desired.mode === undefined)
+        shadowDesired.workMode = speed === 0 ? BREEVA_MODES.sleep : BREEVA_MODES.manual;
     }
     if (desired.mode !== undefined && !hasFanSpeed)
       shadowDesired.workMode = desired.mode === "auto" ? BREEVA_MODES.auto : desired.mode;
