@@ -25,6 +25,10 @@ const boolValue = (value: unknown): boolean =>
   value === true || value === 1 || value === "1" || value === "on" || value === "ON";
 const numberValue = (value: unknown): number | undefined =>
   typeof value === "number" ? value : Number.isFinite(Number(value)) ? Number(value) : undefined;
+const isAutoFanMode = (value: unknown): boolean =>
+  value === FanControl.FanMode.Auto ||
+  value === FanControl.FanMode.Smart ||
+  String(value).toLowerCase() === "auto";
 
 export default function initializePlugin(
   matterbridge: PlatformMatterbridge,
@@ -39,6 +43,9 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
   private pollTimer?: ReturnType<typeof setInterval>;
   private updatingMatter = false;
   private readonly devices = new Map<string, { api: TclDevice; endpoint: MatterbridgeEndpoint }>();
+  private readonly pendingCommands = new Map<string, Json>();
+  private readonly pendingPriorities = new Map<string, "fan" | "mode">();
+  private readonly runningCommands = new Set<string>();
 
   constructor(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: TclPlatformConfig) {
     super(matterbridge, log, config);
@@ -132,11 +139,16 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
             });
         })
         .subscribeAttribute(FanControl, "fanMode", (value) => {
+          this.log.debug(`TCL fanMode write for ${device.deviceId}: value=${String(value)}`);
           if (!this.updatingMatter)
-            void this.command(device, { mode: value === 6 ? "auto" : value });
+            void this.command(device, { mode: isAutoFanMode(value) ? "auto" : value });
         })
         .subscribeAttribute(FanControl, "percentSetting", (value) => {
-          if (!this.updatingMatter) void this.command(device, { fanSpeed: value });
+          this.log.debug(`TCL percentSetting write for ${device.deviceId}: value=${String(value)}`);
+          // Matter sets PercentSetting to null when FanMode changes to Auto.
+          // That is a state transition, not a request to set speed to zero.
+          if (!this.updatingMatter && value !== null && value !== undefined)
+            void this.command(device, { fanSpeed: value });
         });
       this.setSelectDevice(device.deviceId, device.deviceName ?? device.deviceId);
       if (this.validateDevice([device.deviceName ?? device.deviceId, device.deviceId])) {
@@ -147,14 +159,48 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
     await this.poll();
   }
 
-  private async command(device: TclDevice, desired: Json): Promise<void> {
+  private command(device: TclDevice, desired: Json): void {
+    const pending = this.pendingCommands.get(device.deviceId) ?? {};
+    if (!this.pendingPriorities.has(device.deviceId)) {
+      if (desired.mode !== undefined) this.pendingPriorities.set(device.deviceId, "mode");
+      else if (desired.fanSpeed !== undefined) this.pendingPriorities.set(device.deviceId, "fan");
+    }
+    const merged = { ...pending, ...desired };
+    // Apple Home may send the current percentSetting together with a mode
+    // change. Preserve whichever user action arrived first in that burst.
+    const priority = this.pendingPriorities.get(device.deviceId);
+    if (priority === "fan" && merged.mode === "auto") delete merged.mode;
+    if (priority === "mode" && merged.fanSpeed !== undefined) delete merged.fanSpeed;
+    this.pendingCommands.set(device.deviceId, merged);
+    if (this.runningCommands.has(device.deviceId)) return;
+    this.runningCommands.add(device.deviceId);
+    void this.drainCommands(device);
+  }
+  private async drainCommands(device: TclDevice): Promise<void> {
     try {
-      await this.client.sendCommand(device, desired);
-      this.log.info(`TCL command sent to ${device.deviceId}`);
-    } catch (error) {
-      this.log.error(
-        `TCL command failed for ${device.deviceId}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      while (this.pendingCommands.has(device.deviceId)) {
+        // Apple Home can emit power and fan writes as a short burst. Give the
+        // burst a small coalescing window before sending the latest state.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const desired = this.pendingCommands.get(device.deviceId);
+        this.pendingCommands.delete(device.deviceId);
+        this.pendingPriorities.delete(device.deviceId);
+        if (!desired) continue;
+        try {
+          await this.client.sendCommand(device, desired);
+          this.log.info(`TCL command sent to ${device.deviceId}: ${JSON.stringify(desired)}`);
+        } catch (error) {
+          this.log.error(
+            `TCL command failed for ${device.deviceId}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+    } finally {
+      this.runningCommands.delete(device.deviceId);
+      if (this.pendingCommands.has(device.deviceId)) {
+        this.runningCommands.add(device.deviceId);
+        void this.drainCommands(device);
+      }
     }
   }
   private async poll(): Promise<void> {
@@ -190,7 +236,9 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
         await endpoint.setAttribute(
           FanControl,
           "fanMode",
-          String(state.mode).toLowerCase() === "auto" || state.mode === 0 ? 6 : 1,
+          String(state.mode).toLowerCase() === "auto" || state.mode === 0
+            ? FanControl.FanMode.Auto
+            : FanControl.FanMode.Low,
           this.log,
         );
     } finally {

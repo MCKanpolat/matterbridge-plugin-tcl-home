@@ -74,6 +74,7 @@ The plugin needs outbound HTTPS access to TCL Home and AWS endpoints. In Docker 
 - Power → Matter OnOff
 - Fan speed and auto mode → Matter FanControl
 - Online status → endpoint reachability
+- Apple Home command bursts are serialized and coalesced before cloud publish
 
 Air-quality and filter fields are parsed defensively, but are not exposed as separate Matter sensor endpoints until their exact runtime cluster API and Breeva payloads are confirmed.
 

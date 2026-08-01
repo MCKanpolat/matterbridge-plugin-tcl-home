@@ -1,6 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 import { IoTDataPlaneClient, PublishCommand } from "@aws-sdk/client-iot-data-plane";
-import { BREEVA_FUNCTIONS, firstValue } from "./breeva-map.js";
+import { BREEVA_FUNCTIONS, BREEVA_MODES, firstValue } from "./breeva-map.js";
 
 export type Json = Record<string, any>;
 export interface TclHomeConfig {
@@ -241,12 +241,19 @@ export class TclHomeClient {
     }
     const shadowDesired: Json = {};
     if (desired.power !== undefined) shadowDesired.powerSwitch = desired.power;
-    if (desired.fanSpeed !== undefined) {
+    const hasFanSpeed =
+      desired.fanSpeed !== undefined &&
+      desired.fanSpeed !== null &&
+      Number.isFinite(Number(desired.fanSpeed));
+    if (hasFanSpeed) {
       const speed = Number(desired.fanSpeed);
       shadowDesired.windSpeed = speed <= 4 ? Math.round(speed) : Math.round(speed / 25);
+      // Breeva ignores manual speed changes while Auto mode is active.
+      // Selecting a speed from Matter therefore also selects Manual mode.
+      if (desired.mode === undefined) shadowDesired.workMode = BREEVA_MODES.manual;
     }
-    if (desired.mode !== undefined)
-      shadowDesired.workMode = desired.mode === "auto" ? 0 : desired.mode;
+    if (desired.mode !== undefined && !hasFanSpeed)
+      shadowDesired.workMode = desired.mode === "auto" ? BREEVA_MODES.auto : desired.mode;
     if (desired.screen !== undefined) shadowDesired.screenSwitch = switchValue(desired.screen);
     if (desired.anion !== undefined) shadowDesired.anionSwitch = switchValue(desired.anion);
     if (desired.childLock !== undefined)

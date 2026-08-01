@@ -22,6 +22,12 @@ export const BREEVA_FUNCTIONS = {
   favoriteMode: ["favouriteModeSwitch", "favoriteModeSwitch", "favourite_mode_switch"],
 } as const;
 
+/** Breeva A2 values observed from the real device. */
+export const BREEVA_MODES = {
+  auto: 0,
+  manual: 2,
+} as const;
+
 export type BreevaFunction = keyof typeof BREEVA_FUNCTIONS;
 
 export function isSupportedBreeva(deviceName?: string): boolean {
