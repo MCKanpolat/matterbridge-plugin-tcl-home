@@ -49,7 +49,7 @@ jobs:
 
       - name: Calculate next version
         id: versioning
-        uses: MCKanpolat/auto-semver-action@v2
+        uses: MCKanpolat/auto-semver-action@1.0.12
         with:
           releaseType: ${{ inputs.releaseType }}
           incrementPerCommit: ${{ inputs.incrementPerCommit }}
