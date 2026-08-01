@@ -73,6 +73,7 @@ The plugin needs outbound HTTPS access to TCL Home and AWS endpoints. In Docker 
 - Breeva A3 and A5 are accepted by the same guarded mapping and need real-device validation
 - Power → Matter OnOff
 - Fan speed and auto mode → Matter FanControl
+- Fan percentage is mapped to Breeva's discrete steps: 0% off, 25% Sleep, 50% speed 2, 75% speed 3, and 100% speed 4; intermediate values use the nearest step
 - Online status → endpoint reachability
 - Apple Home command bursts are serialized and coalesced before cloud publish
 
@@ -80,7 +81,7 @@ Air-quality and filter fields are parsed defensively, but are not exposed as sep
 
 ## Known limitations / real-device testing needed
 
-The TCL Home API is unofficial and reverse-engineered. Exact Breeva shadow keys can differ by region and firmware; aliases and TODOs are isolated in `src/breeva-map.ts`. AWS IoT shadow credentials and command payloads must be tested against a real account/device. Apple Home may hide some advanced Matter controls. Auto-mode and fan-speed enum values may require adjustment after observing an A2 shadow.
+The TCL Home API is unofficial and reverse-engineered. Exact Breeva shadow keys can differ by region and firmware; aliases and TODOs are isolated in `src/breeva-map.ts`. AWS IoT shadow credentials and command payloads must be tested against a real account/device. Apple Home may hide some advanced Matter controls. Auto-mode and fan-speed mappings require real-device validation across firmware versions.
 
 Do not use a primary TCL account if possible. TCL may change or restrict this private API without notice.
 
