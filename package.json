@@ -1,6 +1,6 @@
 {
   "name": "matterbridge-plugin-tcl-home",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Unofficial Matterbridge plugin for TCL Home Breeva air purifiers",
   "homepage": "https://github.com/MCKanpolat/matterbridge-plugin-tcl-home",
   "bugs": {
