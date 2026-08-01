@@ -3,9 +3,9 @@ import { firstValue, isSupportedBreeva } from "./breeva-map.js";
 
 describe("Breeva mapping", () => {
   it("recognizes supported Breeva products", () => {
-    expect(isSupportedBreeva("BREEVA_A2")).toBe(true);
-    expect(isSupportedBreeva("BREEVA_A5")).toBe(true);
-    expect(isSupportedBreeva("SMART_TV")).toBe(false);
+    expect(isSupportedBreeva("breeva A2")).toBe(true);
+    expect(isSupportedBreeva("Breeva Air Purifier A5")).toBe(true);
+    expect(isSupportedBreeva("SMART TV")).toBe(false);
   });
 
   it("uses the first available API alias", () => {

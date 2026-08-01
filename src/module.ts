@@ -37,6 +37,7 @@ export default function initializePlugin(
 export class TclPlatform extends MatterbridgeDynamicPlatform {
   private readonly client: TclHomeClient;
   private pollTimer?: ReturnType<typeof setInterval>;
+  private updatingMatter = false;
   private readonly devices = new Map<string, { api: TclDevice; endpoint: MatterbridgeEndpoint }>();
 
   constructor(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: TclPlatformConfig) {
@@ -91,7 +92,7 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
 
   private allowed(device: TclDevice): boolean {
     const config = this.config as TclPlatformConfig;
-    const ids = [device.deviceId, device.deviceName, device.nickName].filter(Boolean) as string[];
+    const ids = [device.deviceId, device.deviceName].filter(Boolean) as string[];
     return (
       (!config.whiteList?.length || ids.some((id) => config.whiteList?.includes(id))) &&
       !ids.some((id) => config.blackList?.includes(id))
@@ -102,7 +103,7 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
     const found = await this.client.discover();
     this.log.info(`TCL Home discovered ${found.length} device(s)`);
     for (const device of found) {
-      if (!isSupportedBreeva(device.productKey, device.category, device.deviceType)) {
+      if (!isSupportedBreeva(device.deviceName)) {
         this.log.warn(
           `Unsupported TCL device ${device.deviceId}: type=${device.deviceType ?? "unknown"} category=${device.category ?? "unknown"} productKey=${device.productKey ?? "unknown"}`,
         );
@@ -111,7 +112,7 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
       if (!this.allowed(device) || this.devices.has(device.deviceId)) continue;
       const endpoint = new MatterbridgeEndpoint(airPurifier, { id: device.deviceId })
         .createDefaultBridgedDeviceBasicInformationClusterServer(
-          device.nickName ?? device.deviceName ?? "TCL Breeva",
+          device.deviceName ?? "TCL Breeva",
           device.deviceId,
           this.matterbridge.aggregatorVendorId,
           "TCL",
@@ -121,35 +122,24 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
         )
         .createDefaultPowerSourceWiredClusterServer()
         .addRequiredClusters()
+        .addClusterServers([OnOff.id])
         .addCommandHandler("on", () => void this.command(device, { power: 1 }))
         .addCommandHandler("off", () => void this.command(device, { power: 0 }))
-        .addCommandHandler(
-          "step",
-          (data) =>
+        .addCommandHandler("step", (data) => {
+          if (!this.updatingMatter)
             void this.command(device, {
               fanSpeed: (data.request as { direction?: number }).direction,
-            }),
-        )
-        .subscribeAttribute(
-          FanControl,
-          "fanMode",
-          (value) => void this.command(device, { mode: value === 6 ? "auto" : value }),
-        )
-        .subscribeAttribute(
-          FanControl,
-          "percentSetting",
-          (value) => void this.command(device, { fanSpeed: value }),
-        );
-      this.setSelectDevice(
-        device.deviceId,
-        device.nickName ?? device.deviceName ?? device.deviceId,
-      );
-      if (
-        this.validateDevice([
-          device.nickName ?? device.deviceName ?? device.deviceId,
-          device.deviceId,
-        ])
-      ) {
+            });
+        })
+        .subscribeAttribute(FanControl, "fanMode", (value) => {
+          if (!this.updatingMatter)
+            void this.command(device, { mode: value === 6 ? "auto" : value });
+        })
+        .subscribeAttribute(FanControl, "percentSetting", (value) => {
+          if (!this.updatingMatter) void this.command(device, { fanSpeed: value });
+        });
+      this.setSelectDevice(device.deviceId, device.deviceName ?? device.deviceId);
+      if (this.validateDevice([device.deviceName ?? device.deviceId, device.deviceId])) {
         await this.registerDevice(endpoint);
         this.devices.set(device.deviceId, { api: device, endpoint });
       }
@@ -183,23 +173,28 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
     state: Json,
     online: boolean,
   ): Promise<void> {
-    await endpoint.setAttribute(BridgedDeviceBasicInformation, "reachable", online, this.log);
-    if (state.power !== undefined)
-      await endpoint.setAttribute(OnOff, "onOff", boolValue(state.power), this.log);
-    const speed = numberValue(state.fanSpeed);
-    if (speed !== undefined)
-      await endpoint.setAttribute(
-        FanControl,
-        "percentCurrent",
-        Math.max(0, Math.min(100, speed <= 4 ? speed * 25 : speed)),
-        this.log,
-      );
-    if (state.mode !== undefined)
-      await endpoint.setAttribute(
-        FanControl,
-        "fanMode",
-        String(state.mode).toLowerCase() === "auto" ? 6 : 1,
-        this.log,
-      );
+    this.updatingMatter = true;
+    try {
+      await endpoint.setAttribute(BridgedDeviceBasicInformation, "reachable", online, this.log);
+      if (state.power !== undefined)
+        await endpoint.setAttribute(OnOff, "onOff", boolValue(state.power), this.log);
+      const speed = numberValue(state.fanSpeed);
+      if (speed !== undefined)
+        await endpoint.setAttribute(
+          FanControl,
+          "percentCurrent",
+          Math.max(0, Math.min(100, speed <= 4 ? speed * 25 : speed)),
+          this.log,
+        );
+      if (state.mode !== undefined)
+        await endpoint.setAttribute(
+          FanControl,
+          "fanMode",
+          String(state.mode).toLowerCase() === "auto" || state.mode === 0 ? 6 : 1,
+          this.log,
+        );
+    } finally {
+      this.updatingMatter = false;
+    }
   }
 }
