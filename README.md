@@ -55,3 +55,7 @@ Air-quality and filter fields are parsed defensively, but are not exposed as sep
 The TCL Home API is unofficial and reverse-engineered. Exact Breeva shadow keys can differ by region and firmware; aliases and TODOs are isolated in `src/breeva-map.ts`. AWS IoT shadow credentials and command payloads must be tested against a real account/device. Apple Home may hide some advanced Matter controls. Auto-mode and fan-speed enum values may require adjustment after observing an A2 shadow.
 
 Do not use a primary TCL account if possible. TCL may change or restrict this private API without notice.
+
+## License
+
+Apache License 2.0. See [`LICENSE`](./LICENSE).
