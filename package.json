@@ -53,9 +53,12 @@
     "lint": "oxlint --disable-nested-config src",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "test": "vitest run"
+    "test": "vitest run",
+    "live-test:breeva-a2": "npm run build && node live-tests/live-test-breeva-a2.mjs"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@aws-sdk/client-iot-data-plane": "^3.1101.0"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "oxfmt": "^0.60.0",

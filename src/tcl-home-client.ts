@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { IoTDataPlaneClient, PublishCommand } from "@aws-sdk/client-iot-data-plane";
 import { BREEVA_FUNCTIONS, firstValue } from "./breeva-map.js";
 
 export type Json = Record<string, any>;
@@ -15,7 +16,6 @@ export interface TclDevice {
   category?: string;
   deviceType?: string;
   deviceName?: string;
-  nickName?: string;
   isOnline: boolean;
   raw: Json;
 }
@@ -24,6 +24,28 @@ const APP_ID = "wx6e1af3fa84fbe523";
 const md5 = (value: string) => createHash("md5").update(value).digest("hex");
 const text = (value: unknown) =>
   typeof value === "string" || typeof value === "number" ? String(value) : undefined;
+const onlineValue = (value: unknown): boolean =>
+  value === true || value === 1 || value === "1" || value === "true" || value === "on";
+const sensitiveKey = /(password|token|secret|credential|authorization|accesskey|sessiontoken)/i;
+const redact = (value: unknown, depth = 0): unknown => {
+  if (depth > 4) return "[truncated]";
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => redact(item, depth + 1));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      sensitiveKey.test(key) ? "[redacted]" : redact(item, depth + 1),
+    ]),
+  );
+};
+const debugJson = (value: unknown): string => {
+  try {
+    const json = JSON.stringify(redact(value));
+    return json.length > 4000 ? `${json.slice(0, 4000)}…[truncated]` : json;
+  } catch {
+    return "[unserializable]";
+  }
+};
 const jwtPayload = (token: string): Json => {
   try {
     return JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString()) as Json;
@@ -42,9 +64,19 @@ export class TclHomeClient {
     private readonly log: (message: string, error?: boolean) => void,
   ) {}
 
+  private accountId(): string {
+    return text(this.auth?.user?.username ?? this.auth?.user?.userName) ?? this.config.username;
+  }
+
   private async request(url: string, init: RequestInit = {}): Promise<Json> {
     const response = await fetch(url, { ...init, signal: AbortSignal.timeout(15000) });
     const body = (await response.json()) as Json;
+    if (this.config.debug) {
+      const parsed = new URL(url);
+      this.log(
+        `TCL response ${init.method ?? "GET"} ${parsed.host}${parsed.pathname} HTTP ${response.status}: ${debugJson(body)}`,
+      );
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status} from TCL Home`);
     return body;
   }
@@ -85,24 +117,34 @@ export class TclHomeClient {
   private async ensureSession(): Promise<void> {
     if (!this.auth || (jwtPayload(this.auth.token).exp ?? 0) < Date.now() / 1000 + 60)
       await this.login();
-    if (!this.urls)
-      this.urls = (
-        await this.request(this.config.cloudUrl, {
-          method: "POST",
-          headers: { "content-type": "application/json", "user-agent": "Android" },
-          body: JSON.stringify({ ssoId: this.config.username, ssoToken: this.auth!.token }),
-        })
-      ).data;
+    if (!this.urls) {
+      const cloudResponse = await this.request(this.config.cloudUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json", "user-agent": "Android" },
+        body: JSON.stringify({
+          ssoId: this.accountId(),
+          ssoToken: this.auth!.token,
+        }),
+      });
+      if (cloudResponse.code !== undefined && cloudResponse.code !== 0)
+        throw new Error(
+          `TCL cloud URL lookup failed: ${cloudResponse.message ?? cloudResponse.code}`,
+        );
+      this.urls = cloudResponse.data as Json;
+      if (!this.urls || typeof this.urls !== "object")
+        throw new Error("TCL cloud URL lookup returned no URL data");
+    }
     if (
       !this.refresh ||
-      (jwtPayload(this.refresh.saas_token).expiredDate ?? 0) < Date.now() / 1000 + 60
+      (jwtPayload(this.refresh.saas_token ?? this.refresh.saasToken).expiredDate ?? 0) <
+        Date.now() / 1000 + 60
     ) {
       const base = text(this.urls!.cloud_url) ?? "";
       const result = await this.request(`${base}/v3/auth/refresh_tokens`, {
         method: "POST",
         headers: { "content-type": "application/json", "user-agent": "Android" },
         body: JSON.stringify({
-          userId: this.config.username,
+          userId: this.accountId(),
           ssoToken: this.auth!.token,
           appId: APP_ID,
         }),
@@ -115,7 +157,7 @@ export class TclHomeClient {
       await this.loadAwsCredentials();
   }
   private async loadAwsCredentials(): Promise<void> {
-    const token = text(this.refresh!.cognito_token);
+    const token = text(this.refresh!.cognito_token ?? this.refresh!.cognitoToken);
     const region = text(this.urls!.cloud_region) ?? "us-east-1";
     if (!token) throw new Error("TCL Home did not return a Cognito token");
     const identityId = jwtPayload(token).sub;
@@ -136,7 +178,7 @@ export class TclHomeClient {
   private signedHeaders(): Record<string, string> {
     const timestamp = String(Date.now());
     const nonce = Math.random().toString(36).slice(2, 18);
-    const token = text(this.refresh!.saas_token) ?? "";
+    const token = text(this.refresh!.saas_token ?? this.refresh!.saasToken) ?? "";
     return {
       platform: "android",
       appversion: "5.4.1",
@@ -163,10 +205,9 @@ export class TclHomeClient {
         deviceId: text(raw.device_id ?? raw.deviceId) ?? "",
         productKey: text(raw.product_key ?? raw.productKey),
         category: text(raw.category),
-        deviceType: text(raw.device_type ?? raw.deviceType),
+        deviceType: text(raw.device_type ?? raw.deviceType ?? raw.type),
         deviceName: text(raw.device_name ?? raw.deviceName),
-        nickName: text(raw.nick_name ?? raw.nickName),
-        isOnline: Boolean(raw.is_online ?? raw.isOnline),
+        isOnline: onlineValue(raw.is_online ?? raw.isOnline),
         raw,
       }))
       .filter((device) => device.deviceId);
@@ -178,31 +219,50 @@ export class TclHomeClient {
       headers: this.signedHeaders(),
       body: JSON.stringify({
         productKey: device.productKey,
-        countryCode: this.auth?.user?.country_abbr,
+        countryCode: this.auth?.user?.country_abbr ?? this.auth?.user?.countryAbbr,
       }),
     });
     return (result.data ?? result) as Json;
   }
   async readState(device: TclDevice): Promise<Json> {
     await this.ensureSession();
-    const endpoint = text(this.refresh!.mqtt_endpoint);
+    const endpoint = this.shadowEndpoint();
     if (!endpoint || !this.credentials) return {};
     return this.awsShadow(endpoint, device.deviceId, "GET");
   }
   async sendCommand(device: TclDevice, desired: Json): Promise<void> {
     await this.ensureSession();
-    const endpoint = text(this.refresh!.mqtt_endpoint);
-    if (!endpoint || !this.credentials) {
+    if (!this.credentials || !this.urls?.cloud_region) {
       this.log(
         `Command queued for ${device.deviceId}; AWS IoT credentials are not initialized`,
         true,
       );
       return;
     }
-    await this.awsShadow(endpoint, device.deviceId, "POST", {
-      state: { desired },
+    const shadowDesired: Json = {};
+    if (desired.power !== undefined) shadowDesired.powerSwitch = desired.power;
+    if (desired.fanSpeed !== undefined) {
+      const speed = Number(desired.fanSpeed);
+      shadowDesired.windSpeed = speed <= 4 ? Math.round(speed) : Math.round(speed / 25);
+    }
+    if (desired.mode !== undefined)
+      shadowDesired.workMode = desired.mode === "auto" ? 0 : desired.mode;
+    if (desired.screen !== undefined) shadowDesired.screenSwitch = switchValue(desired.screen);
+    if (desired.anion !== undefined) shadowDesired.anionSwitch = switchValue(desired.anion);
+    if (desired.childLock !== undefined)
+      shadowDesired.childLockSwitch = switchValue(desired.childLock);
+    if (desired.timer !== undefined) shadowDesired.timerRemaining = Number(desired.timer);
+    if (desired.panelLightAutoOff !== undefined)
+      shadowDesired.panelLightAutoOFF = switchValue(desired.panelLightAutoOff);
+    if (desired.favoriteMode !== undefined)
+      shadowDesired.favouriteModeSwitch = switchValue(desired.favoriteMode);
+    await this.publishShadow(device.deviceId, {
+      state: { desired: shadowDesired },
       clientToken: `matterbridge_${Date.now()}`,
     });
+  }
+  private shadowEndpoint(): string | undefined {
+    return text(this.refresh?.mqtt_endpoint ?? this.refresh?.mqttEndpoint);
   }
   private async awsShadow(
     endpoint: string,
@@ -211,7 +271,7 @@ export class TclHomeClient {
     body?: Json,
   ): Promise<Json> {
     // The AWS IoT shadow path is kept isolated so Cognito/SigV4 can be adjusted without touching Matter mapping.
-    const host = endpoint.startsWith("http") ? endpoint : `https://${endpoint}`;
+    const host = `https://${endpoint.replace(/^wss?:\/\//, "").replace(/:8883$/, "")}`;
     const url = `${host.replace(/\/$/, "")}/things/${encodeURIComponent(deviceId)}/shadow`;
     const parsed = new URL(url);
     const payload = body ? JSON.stringify(body) : "";
@@ -222,8 +282,40 @@ export class TclHomeClient {
       ...(payload ? { body: payload } : {}),
       signal: AbortSignal.timeout(15000),
     });
+    const responseBody = (await response.json()) as Json;
+    if (this.config.debug) {
+      this.log(
+        `TCL AWS shadow ${method} ${parsed.pathname} HTTP ${response.status}: ${debugJson(responseBody)}`,
+      );
+    }
     if (!response.ok) throw new Error(`AWS IoT shadow HTTP ${response.status}`);
-    return (await response.json()) as Json;
+    return responseBody;
+  }
+  private async publishShadow(deviceId: string, body: Json): Promise<void> {
+    const region = text(this.urls?.cloud_region);
+    const topic = `$aws/things/${deviceId}/shadow/update`;
+    const payload = JSON.stringify(body);
+    if (!region) throw new Error("AWS IoT region is unavailable");
+    const accessKeyId = text(this.credentials?.AccessKeyId);
+    const secretAccessKey = text(this.credentials?.SecretKey);
+    if (!accessKeyId || !secretAccessKey) throw new Error("AWS IoT credentials are unavailable");
+    const client = new IoTDataPlaneClient({
+      region,
+      endpoint: `https://data-ats.iot.${region}.amazonaws.com`,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+        sessionToken: text(this.credentials?.SessionToken),
+      },
+    });
+    try {
+      await client.send(
+        new PublishCommand({ topic, qos: 1, payload: Buffer.from(payload, "utf8") }),
+      );
+    } finally {
+      client.destroy();
+    }
+    if (this.config.debug) this.log(`TCL MQTT shadow publish ${topic}: ${debugJson(body)}`);
   }
   private signAwsRequest(method: string, url: URL, payload: string): Record<string, string> {
     const accessKey = text(this.credentials?.AccessKeyId);
@@ -231,7 +323,8 @@ export class TclHomeClient {
     const session = text(this.credentials?.SessionToken);
     if (!accessKey || !secret) throw new Error("AWS IoT credentials are unavailable");
     const region = text(this.urls!.cloud_region) ?? "us-east-1";
-    const service = "iotdata";
+    // AWS calls the IoT Data Plane service "iotdevicegateway" for SigV4.
+    const service = "iotdevicegateway";
     const now = new Date();
     const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
     const date = amzDate.slice(0, 8);
@@ -279,6 +372,18 @@ export class TclHomeClient {
       airQuality: firstValue(state, BREEVA_FUNCTIONS.airQuality),
       filterLife: firstValue(state, BREEVA_FUNCTIONS.filterLife),
       filterWarning: firstValue(state, BREEVA_FUNCTIONS.filterWarning),
+      screen: firstValue(state, BREEVA_FUNCTIONS.screen),
+      anion: firstValue(state, BREEVA_FUNCTIONS.anion),
+      childLock: firstValue(state, BREEVA_FUNCTIONS.childLock),
+      timer: firstValue(state, BREEVA_FUNCTIONS.timer),
+      panelLightAutoOff: firstValue(state, BREEVA_FUNCTIONS.panelLightAutoOff),
+      favoriteMode: firstValue(state, BREEVA_FUNCTIONS.favoriteMode),
     };
   }
+}
+
+function switchValue(value: unknown): 0 | 1 {
+  if (value === true || value === 1 || value === "1" || value === "true" || value === "on")
+    return 1;
+  return 0;
 }

@@ -36,6 +36,33 @@ Copy [`matterbridge-plugin-tcl-home.config.json`](./matterbridge-plugin-tcl-home
 
 `appLoginUrl` and `cloudUrl` are optional overrides. Credentials are never written to logs.
 
+## Local debugging
+
+Set `debug` to `true` in the Matterbridge plugin configuration. The plugin then logs TCL HTTP status codes, endpoint paths, response summaries, device discovery data, and AWS shadow responses. Passwords, tokens, AWS credentials, and authorization values are redacted and response output is truncated.
+
+With the DevContainer running:
+
+```bash
+npm link matterbridge
+npm run build
+npm run add
+npm run start -- --logger debug --fixed_delay 0 --frontend 8283
+```
+
+Open `http://localhost:8283`, configure the plugin, and watch the terminal output. Do not paste credentials into shell commands or commit the generated Matterbridge configuration.
+
+### Breeva A2 live test
+
+The repository contains a real-device test at [`live-tests/live-test-breeva-a2.mjs`](./live-tests/live-test-breeva-a2.mjs). It exercises power, fan speeds, modes, screen, anion, child lock, timer, panel light, and favorite mode, then restores the initial state.
+
+Run it only when the Breeva A2 can safely be controlled:
+
+```bash
+npm run live-test:breeva-a2
+```
+
+The script reads the Matterbridge configuration at runtime. It contains no credentials and does not print passwords, tokens, or AWS credentials. Override the config path with `MATTERBRIDGE_CONFIG` when needed.
+
 ## iHost / Docker
 
 The plugin needs outbound HTTPS access to TCL Home and AWS endpoints. In Docker or iHost, ensure the container has DNS, internet access, and persistent Matterbridge storage. The integration is cloud-based; local LAN access to the purifier is not used.
