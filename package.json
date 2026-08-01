@@ -2,6 +2,19 @@
   "name": "matterbridge-plugin-tcl-home",
   "version": "1.0.0",
   "description": "Unofficial Matterbridge plugin for TCL Home Breeva air purifiers",
+  "keywords": [
+    "air-purifier",
+    "air-quality",
+    "breeva",
+    "home-automation",
+    "matter",
+    "matter-protocol",
+    "matterbridge",
+    "matterbridge-plugin",
+    "smart-home",
+    "tcl",
+    "tcl-home"
+  ],
   "homepage": "https://github.com/MCKanpolat/matterbridge-plugin-tcl-home",
   "bugs": {
     "url": "https://github.com/MCKanpolat/matterbridge-plugin-tcl-home/issues"
@@ -28,6 +41,13 @@
     }
   },
   "scripts": {
+    "start": "matterbridge",
+    "add": "matterbridge --add .",
+    "remove": "matterbridge --remove .",
+    "enable": "matterbridge --enable .",
+    "disable": "matterbridge --disable .",
+    "link": "npm link --no-fund --no-audit matterbridge",
+    "unlink": "npm unlink matterbridge",
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "oxlint --disable-nested-config src",
@@ -35,9 +55,7 @@
     "format:check": "oxfmt --check",
     "test": "vitest run"
   },
-  "dependencies": {
-    "matterbridge": ">=3.10.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.0.0",
     "oxfmt": "^0.60.0",
