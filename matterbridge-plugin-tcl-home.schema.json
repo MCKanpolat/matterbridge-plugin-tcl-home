@@ -1,0 +1,42 @@
+{
+  "title": "TCL Home",
+  "description": "Unofficial cloud integration for TCL Home Breeva devices",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "readOnly": true, "ui:widget": "hidden" },
+    "type": { "type": "string", "readOnly": true, "ui:widget": "hidden" },
+    "username": { "title": "TCL Home username", "type": "string" },
+    "password": { "title": "TCL Home password", "type": "string", "format": "password" },
+    "appLoginUrl": {
+      "title": "App login URL",
+      "type": "string",
+      "default": "https://pa.account.tcl.com/account/login?clientId=54148614"
+    },
+    "cloudUrl": {
+      "title": "Cloud URL",
+      "type": "string",
+      "default": "https://prod-center.aws.tcljd.com/v3/global/cloud_url_get"
+    },
+    "pollingInterval": {
+      "title": "Polling interval (seconds)",
+      "type": "integer",
+      "minimum": 10,
+      "default": 60
+    },
+    "whiteList": {
+      "title": "Device whitelist",
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "blackList": {
+      "title": "Device blacklist",
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "debug": { "title": "Debug logging", "type": "boolean", "default": false },
+    "unregisterOnShutdown": { "type": "boolean", "default": false }
+  },
+  "required": ["username", "password"]
+}

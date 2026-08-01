@@ -1,0 +1,10 @@
+{
+  "name": "matterbridge-plugin-tcl-home",
+  "type": "DynamicPlatform",
+  "username": "your-tcl-home-username",
+  "password": "your-tcl-home-password",
+  "pollingInterval": 60,
+  "whiteList": [],
+  "blackList": [],
+  "debug": false
+}
