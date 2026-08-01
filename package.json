@@ -64,6 +64,7 @@
     "vitest": "^3.0.0"
   },
   "engines": {
+    "matterbridge": ">=3.10.0",
     "node": ">=20.19.0"
   }
 }
