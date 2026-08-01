@@ -62,7 +62,8 @@ print("initial", initial, [
 try {
   await test("power_off", { power: 0 }, ["powerSwitch"]);
   await test("power_on", { power: 1 }, ["powerSwitch"]);
-  for (const speed of [1, 2, 3, 4]) await test(`fan_${speed}`, { fanSpeed: speed }, ["windSpeed"]);
+  for (const percent of [25, 50, 75, 100])
+    await test(`fan_percent_${percent}`, { fanSpeed: percent }, ["windSpeed"]);
   await test("mode_2", { mode: 2 }, ["workMode"]);
   await test("mode_auto", { mode: "auto" }, ["workMode"]);
   await test("screen_off", { screen: 0 }, ["screenSwitch"]);
@@ -78,11 +79,42 @@ try {
   await test("favorite_mode_on", { favoriteMode: 1 }, ["favouriteModeSwitch"]);
   await test("favorite_mode_off", { favoriteMode: 0 }, ["favouriteModeSwitch"]);
 } finally {
-  await client.sendCommand(
-    device,
-    Object.fromEntries(Object.entries(original).filter(([, value]) => value !== undefined)),
-  );
-  await wait();
+  if (original.power !== undefined) {
+    await client.sendCommand(device, { power: original.power });
+    await wait();
+  }
+  if (original.fanSpeed !== undefined && original.mode !== 0) {
+    await client.sendCommand(device, { fanSpeed: Number(original.fanSpeed) * 25 });
+    await wait();
+  }
+  if (original.mode !== undefined) {
+    await client.sendCommand(device, { mode: original.mode });
+    await wait();
+  }
+  if (original.screen !== undefined) {
+    await client.sendCommand(device, { screen: original.screen });
+    await wait();
+  }
+  if (original.anion !== undefined) {
+    await client.sendCommand(device, { anion: original.anion });
+    await wait();
+  }
+  if (original.childLock !== undefined) {
+    await client.sendCommand(device, { childLock: original.childLock });
+    await wait();
+  }
+  if (original.timer !== undefined) {
+    await client.sendCommand(device, { timer: original.timer });
+    await wait();
+  }
+  if (original.panelLightAutoOff !== undefined) {
+    await client.sendCommand(device, { panelLightAutoOff: original.panelLightAutoOff });
+    await wait();
+  }
+  if (original.favoriteMode !== undefined) {
+    await client.sendCommand(device, { favoriteMode: original.favoriteMode });
+    await wait();
+  }
   print("restored", await read(), [
     "powerSwitch",
     "windSpeed",

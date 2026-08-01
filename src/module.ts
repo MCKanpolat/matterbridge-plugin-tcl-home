@@ -7,7 +7,7 @@ import {
 } from "matterbridge";
 import type { AnsiLogger, LogLevel } from "matterbridge/logger";
 import { BridgedDeviceBasicInformation, FanControl, OnOff } from "matterbridge/matter/clusters";
-import { isSupportedBreeva } from "./breeva-map.js";
+import { BREEVA_MODES, isSupportedBreeva } from "./breeva-map.js";
 import { TclHomeClient, type Json, type TclDevice } from "./tcl-home-client.js";
 
 export type TclPlatformConfig = BasePlatformConfig & {
@@ -29,6 +29,8 @@ const isAutoFanMode = (value: unknown): boolean =>
   value === FanControl.FanMode.Auto ||
   value === FanControl.FanMode.Smart ||
   String(value).toLowerCase() === "auto";
+const mapFanModeToBreeva = (value: unknown): "auto" | number =>
+  isAutoFanMode(value) ? "auto" : BREEVA_MODES.manual;
 
 export default function initializePlugin(
   matterbridge: PlatformMatterbridge,
@@ -140,8 +142,7 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
         })
         .subscribeAttribute(FanControl, "fanMode", (value) => {
           this.log.debug(`TCL fanMode write for ${device.deviceId}: value=${String(value)}`);
-          if (!this.updatingMatter)
-            void this.command(device, { mode: isAutoFanMode(value) ? "auto" : value });
+          if (!this.updatingMatter) void this.command(device, { mode: mapFanModeToBreeva(value) });
         })
         .subscribeAttribute(FanControl, "percentSetting", (value) => {
           this.log.debug(`TCL percentSetting write for ${device.deviceId}: value=${String(value)}`);

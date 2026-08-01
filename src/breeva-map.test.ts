@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstValue, isSupportedBreeva } from "./breeva-map.js";
+import { firstValue, isSupportedBreeva, mapBreevaPercentToSpeed } from "./breeva-map.js";
 
 describe("Breeva mapping", () => {
   it("recognizes supported Breeva products", () => {
@@ -11,5 +11,13 @@ describe("Breeva mapping", () => {
   it("uses the first available API alias", () => {
     expect(firstValue({ fanSpeed: 2 }, ["windSpeed", "fanSpeed"])).toBe(2);
     expect(firstValue({}, ["windSpeed", "fanSpeed"])).toBeUndefined();
+  });
+
+  it("maps Matter percentages to Breeva's four discrete speeds", () => {
+    expect(mapBreevaPercentToSpeed(0)).toBe(0);
+    expect(mapBreevaPercentToSpeed(25)).toBe(1);
+    expect(mapBreevaPercentToSpeed(45)).toBe(2);
+    expect(mapBreevaPercentToSpeed(75)).toBe(3);
+    expect(mapBreevaPercentToSpeed(100)).toBe(4);
   });
 });

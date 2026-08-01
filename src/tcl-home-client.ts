@@ -1,6 +1,11 @@
 import { createHash, createHmac } from "node:crypto";
 import { IoTDataPlaneClient, PublishCommand } from "@aws-sdk/client-iot-data-plane";
-import { BREEVA_FUNCTIONS, BREEVA_MODES, firstValue } from "./breeva-map.js";
+import {
+  BREEVA_FUNCTIONS,
+  BREEVA_MODES,
+  firstValue,
+  mapBreevaPercentToSpeed,
+} from "./breeva-map.js";
 
 export type Json = Record<string, any>;
 export interface TclHomeConfig {
@@ -246,8 +251,9 @@ export class TclHomeClient {
       desired.fanSpeed !== null &&
       Number.isFinite(Number(desired.fanSpeed));
     if (hasFanSpeed) {
-      const speed = Number(desired.fanSpeed);
-      shadowDesired.windSpeed = speed <= 4 ? Math.round(speed) : Math.round(speed / 25);
+      const speed = mapBreevaPercentToSpeed(desired.fanSpeed);
+      if (speed === undefined) return;
+      shadowDesired.windSpeed = speed;
       // Breeva ignores manual speed changes while Auto mode is active.
       // Selecting a speed from Matter therefore also selects Manual mode.
       if (desired.mode === undefined) shadowDesired.workMode = BREEVA_MODES.manual;
