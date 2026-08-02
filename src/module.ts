@@ -134,8 +134,14 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
         .addClusterServers([OnOff.id])
         // Matterbridge updates the command's Matter attributes within its transaction.
         // Calling endpoint.setAttribute() from these handlers would deadlock it.
-        .addCommandHandler("on", () => void this.command(device, { power: 1 }))
-        .addCommandHandler("off", () => void this.command(device, { power: 0 }))
+        .addCommandHandler("on", (data) => {
+          data.attributes.onOff = true;
+          void this.command(device, { power: 1 });
+        })
+        .addCommandHandler("off", (data) => {
+          data.attributes.onOff = false;
+          void this.command(device, { power: 0 });
+        })
         .addCommandHandler("step", (data) => {
           if (!this.updatingMatter)
             void this.command(device, {
@@ -225,17 +231,28 @@ export class TclPlatform extends MatterbridgeDynamicPlatform {
     this.updatingMatter = true;
     try {
       await endpoint.setAttribute(BridgedDeviceBasicInformation, "reachable", online, this.log);
-      if (state.power !== undefined)
-        await endpoint.setAttribute(OnOff, "onOff", boolValue(state.power), this.log);
+      const power = state.power === undefined ? undefined : boolValue(state.power);
+      if (power !== undefined) {
+        await endpoint.setAttribute(OnOff, "onOff", power, this.log);
+
+        // Keep the FanControl state consistent with OnOff. Dyson's Matterbridge
+        // integration does the same: Apple Home can otherwise keep the power
+        // transaction pending when the fan mode still reports a running mode.
+        if (!power) {
+          await endpoint.setAttribute(FanControl, "fanMode", FanControl.FanMode.Off, this.log);
+          await endpoint.setAttribute(FanControl, "percentSetting", 0, this.log);
+          await endpoint.setAttribute(FanControl, "percentCurrent", 0, this.log);
+        }
+      }
       const speed = numberValue(state.fanSpeed);
-      if (speed !== undefined)
+      if (power !== false && speed !== undefined)
         await endpoint.setAttribute(
           FanControl,
           "percentCurrent",
           BREEVA_SPEED_PERCENT[Math.round(speed)] ?? Math.max(0, Math.min(100, speed)),
           this.log,
         );
-      if (state.mode !== undefined)
+      if (power !== false && state.mode !== undefined)
         await endpoint.setAttribute(
           FanControl,
           "fanMode",
