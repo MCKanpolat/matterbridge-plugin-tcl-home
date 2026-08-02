@@ -48,17 +48,5 @@ jobs:
       - name: Install Matterbridge for type checking
         run: npm install --no-save --no-package-lock matterbridge@^3.10.0
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Build
-        run: npm run build
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Test
-        run: npm test
+      - name: Verify plugin
+        run: npm run verify

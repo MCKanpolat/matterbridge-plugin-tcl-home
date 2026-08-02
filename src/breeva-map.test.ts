@@ -10,6 +10,8 @@ describe("Breeva mapping", () => {
 
   it("uses the first available API alias", () => {
     expect(firstValue({ fanSpeed: 2 }, ["windSpeed", "fanSpeed"])).toBe(2);
+    expect(firstValue({ windSpeed: null, fanSpeed: 2 }, ["windSpeed", "fanSpeed"])).toBe(2);
+    expect(firstValue({ windSpeed: 0, fanSpeed: 2 }, ["windSpeed", "fanSpeed"])).toBe(0);
     expect(firstValue({}, ["windSpeed", "fanSpeed"])).toBeUndefined();
   });
 
@@ -19,5 +21,7 @@ describe("Breeva mapping", () => {
     expect(mapBreevaPercentToSpeed(45)).toBe(1);
     expect(mapBreevaPercentToSpeed(75)).toBe(2);
     expect(mapBreevaPercentToSpeed(100)).toBe(3);
+    expect(mapBreevaPercentToSpeed("not-a-number")).toBeUndefined();
+    expect(mapBreevaPercentToSpeed(-10)).toBe(0);
   });
 });

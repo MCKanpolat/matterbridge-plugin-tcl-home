@@ -244,32 +244,8 @@ export class TclHomeClient {
       );
       return;
     }
-    const shadowDesired: Json = {};
-    if (desired.power !== undefined) shadowDesired.powerSwitch = desired.power;
-    const hasFanSpeed =
-      desired.fanSpeed !== undefined &&
-      desired.fanSpeed !== null &&
-      Number.isFinite(Number(desired.fanSpeed));
-    if (hasFanSpeed) {
-      const speed = mapBreevaPercentToSpeed(desired.fanSpeed);
-      if (speed === undefined) return;
-      shadowDesired.windSpeed = speed;
-      // Breeva ignores speed changes in Auto. Sleep is its own work mode;
-      // the three higher windSpeed values use Manual mode.
-      if (desired.mode === undefined)
-        shadowDesired.workMode = speed === 0 ? BREEVA_MODES.sleep : BREEVA_MODES.manual;
-    }
-    if (desired.mode !== undefined && !hasFanSpeed)
-      shadowDesired.workMode = desired.mode === "auto" ? BREEVA_MODES.auto : desired.mode;
-    if (desired.screen !== undefined) shadowDesired.screenSwitch = switchValue(desired.screen);
-    if (desired.anion !== undefined) shadowDesired.anionSwitch = switchValue(desired.anion);
-    if (desired.childLock !== undefined)
-      shadowDesired.childLockSwitch = switchValue(desired.childLock);
-    if (desired.timer !== undefined) shadowDesired.timerRemaining = Number(desired.timer);
-    if (desired.panelLightAutoOff !== undefined)
-      shadowDesired.panelLightAutoOFF = switchValue(desired.panelLightAutoOff);
-    if (desired.favoriteMode !== undefined)
-      shadowDesired.favouriteModeSwitch = switchValue(desired.favoriteMode);
+    const shadowDesired = buildBreevaShadowDesired(desired);
+    if (!shadowDesired) return;
     await this.publishShadow(device.deviceId, {
       state: { desired: shadowDesired },
       clientToken: `matterbridge_${Date.now()}`,
@@ -394,6 +370,36 @@ export class TclHomeClient {
       favoriteMode: firstValue(state, BREEVA_FUNCTIONS.favoriteMode),
     };
   }
+}
+
+export function buildBreevaShadowDesired(desired: Json): Json | undefined {
+  const shadowDesired: Json = {};
+  if (desired.power !== undefined) shadowDesired.powerSwitch = desired.power;
+  const hasFanSpeed =
+    desired.fanSpeed !== undefined &&
+    desired.fanSpeed !== null &&
+    Number.isFinite(Number(desired.fanSpeed));
+  if (hasFanSpeed) {
+    const speed = mapBreevaPercentToSpeed(desired.fanSpeed);
+    if (speed === undefined) return undefined;
+    shadowDesired.windSpeed = speed;
+    // Breeva ignores speed changes in Auto. Sleep is its own work mode;
+    // the three higher windSpeed values use Manual mode.
+    if (desired.mode === undefined)
+      shadowDesired.workMode = speed === 0 ? BREEVA_MODES.sleep : BREEVA_MODES.manual;
+  }
+  if (desired.mode !== undefined && !hasFanSpeed)
+    shadowDesired.workMode = desired.mode === "auto" ? BREEVA_MODES.auto : desired.mode;
+  if (desired.screen !== undefined) shadowDesired.screenSwitch = switchValue(desired.screen);
+  if (desired.anion !== undefined) shadowDesired.anionSwitch = switchValue(desired.anion);
+  if (desired.childLock !== undefined)
+    shadowDesired.childLockSwitch = switchValue(desired.childLock);
+  if (desired.timer !== undefined) shadowDesired.timerRemaining = Number(desired.timer);
+  if (desired.panelLightAutoOff !== undefined)
+    shadowDesired.panelLightAutoOFF = switchValue(desired.panelLightAutoOff);
+  if (desired.favoriteMode !== undefined)
+    shadowDesired.favouriteModeSwitch = switchValue(desired.favoriteMode);
+  return shadowDesired;
 }
 
 function switchValue(value: unknown): 0 | 1 {
