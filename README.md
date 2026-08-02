@@ -79,9 +79,11 @@ The plugin needs outbound HTTPS access to TCL Home and AWS endpoints. In Docker 
 
 Air-quality and filter fields are parsed defensively, but are not exposed as separate Matter sensor endpoints until their exact runtime cluster API and Breeva payloads are confirmed.
 
-## Known limitations / real-device testing needed
+## Validation status and known limitations
 
-The TCL Home API is unofficial and reverse-engineered. Exact Breeva shadow keys can differ by region and firmware; aliases and TODOs are isolated in `src/breeva-map.ts`. AWS IoT shadow credentials and command payloads must be tested against a real account/device. Apple Home may hide some advanced Matter controls. Auto-mode and fan-speed mappings require real-device validation across firmware versions.
+The Breeva A2 integration has been tested against a real device, including TCL Home login and discovery, power, Auto mode, Sleep, Low, Mid, and High fan speeds, screen, Anion Sterilization, child lock, timer, panel-light settings, and favorite mode. The discrete A2 fan mapping was validated as 25% Sleep, 50% Low, 75% Mid, and 100% High. The live-test script restores the device's initial state after testing.
+
+The TCL Home API is unofficial and reverse-engineered. Exact shadow keys can still differ by region or firmware; aliases and TODOs are isolated in `src/breeva-map.ts`. The current real-device validation covers Breeva A2 only; Breeva A3 and A5 still need device-specific validation. Air quality and filter fields are parsed defensively but are not currently exposed as Matter sensor endpoints. Apple Home may hide some advanced Matter controls or display a certification warning.
 
 Do not use a primary TCL account if possible. TCL may change or restrict this private API without notice.
 
